@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 const (
@@ -27,6 +29,8 @@ const (
 
 type Config struct {
 	PawPalAPIKey               string
+	DownloadSigningKey         [32]byte
+	TrustedProxyHops           int
 	AppOrigin                  string
 	Port                       int
 	DatabasePath               string
@@ -43,14 +47,41 @@ type AttackerLabConfig struct {
 }
 
 func Load(workingDirectory string) (Config, error) {
-	return Parse(processEnvironment(), workingDirectory)
+	environment, err := loadEnvironment(workingDirectory)
+	if err != nil {
+		return Config{}, err
+	}
+	return Parse(environment, workingDirectory)
 }
 
 func LoadAttackerLab(workingDirectory string) (AttackerLabConfig, error) {
-	return ParseAttackerLab(processEnvironment())
+	environment, err := loadEnvironment(workingDirectory)
+	if err != nil {
+		return AttackerLabConfig{}, err
+	}
+	return ParseAttackerLab(environment)
 }
 
 func Parse(environment map[string]string, workingDirectory string) (Config, error) {
+	pawPalAPIKey, err := requiredValue(environment, "PAWPAL_API_KEY")
+	if err != nil {
+		return Config{}, err
+	}
+
+	downloadSigningKeyRaw, err := requiredValue(environment, "DOWNLOAD_SIGNING_KEY")
+	if err != nil {
+		return Config{}, err
+	}
+	downloadSigningKey, err := parseEncryptionKey(downloadSigningKeyRaw, "DOWNLOAD_SIGNING_KEY")
+	if err != nil {
+		return Config{}, err
+	}
+
+	trustedProxyHops, err := parseNonNegativeInteger(valueOrDefault(environment, "TRUST_PROXY_HOPS", "0"), "TRUST_PROXY_HOPS")
+	if err != nil {
+		return Config{}, err
+	}
+
 	port, err := parseNonNegativeInteger(valueOrDefault(environment, "PORT", strconv.Itoa(defaultPort)), "PORT")
 	if err != nil {
 		return Config{}, err
@@ -79,7 +110,9 @@ func Parse(environment map[string]string, workingDirectory string) (Config, erro
 	}
 
 	return Config{
-		PawPalAPIKey:               "bs_test_pawpal_starter_key",
+		PawPalAPIKey:               pawPalAPIKey,
+		DownloadSigningKey:         downloadSigningKey,
+		TrustedProxyHops:           trustedProxyHops,
 		AppOrigin:                  appOrigin,
 		Port:                       port,
 		DatabasePath:               databasePath,
@@ -103,6 +136,27 @@ func ParseAttackerLab(environment map[string]string) (AttackerLabConfig, error) 
 	return AttackerLabConfig{Port: port}, nil
 }
 
+func loadEnvironment(workingDirectory string) (map[string]string, error) {
+	environment := make(map[string]string)
+	dotenvPath := filepath.Join(workingDirectory, ".env")
+	if _, err := os.Stat(dotenvPath); err == nil {
+		values, err := godotenv.Read(dotenvPath)
+		if err != nil {
+			return nil, fmt.Errorf("read .env: %w", err)
+		}
+		for key, value := range values {
+			environment[key] = value
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("stat .env: %w", err)
+	}
+
+	for name, value := range processEnvironment() {
+		environment[name] = value
+	}
+	return environment, nil
+}
+
 func processEnvironment() map[string]string {
 	environment := make(map[string]string)
 	for _, entry := range os.Environ() {
@@ -119,6 +173,14 @@ func valueOrDefault(environment map[string]string, name, fallback string) string
 		return value
 	}
 	return fallback
+}
+
+func requiredValue(environment map[string]string, name string) (string, error) {
+	value := strings.TrimSpace(environment[name])
+	if value == "" {
+		return "", fmt.Errorf("missing required environment variable: %s", name)
+	}
+	return value, nil
 }
 
 func parseNonNegativeInteger(value, name string) (int, error) {
@@ -164,9 +226,9 @@ func parseOptionalEncryptionKeys(environment map[string]string) (string, map[str
 }
 
 func parseEncryptionKeys(environment map[string]string) (string, map[string][32]byte, error) {
-	configuredVersion := environment[activeEncryptionVersionEnv]
-	if configuredVersion == "" {
-		return "", nil, fmt.Errorf("missing required environment variable: %s", activeEncryptionVersionEnv)
+	configuredVersion, err := requiredValue(environment, activeEncryptionVersionEnv)
+	if err != nil {
+		return "", nil, err
 	}
 	activeVersion, err := normalizeEncryptionVersion(configuredVersion)
 	if err != nil {

@@ -12,6 +12,21 @@ import (
 	"github.com/bootdotdev/learn-web-security/internal/storefront"
 )
 
+type productResponse struct {
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	ImagePath   string `json:"image_path"`
+	PriceCents  int64  `json:"price_cents"`
+}
+
+type orderResponse struct {
+	ID         int64  `json:"id"`
+	Status     string `json:"status"`
+	TotalCents int64  `json:"total_cents"`
+	CreatedAt  string `json:"created_at"`
+}
+
 type integrationOrderResponse struct {
 	ID         int64  `json:"id"`
 	Status     string `json:"status"`
@@ -52,7 +67,16 @@ func (handler *Handler) AccountOrders(responseWriter http.ResponseWriter, reques
 		handler.internalError(responseWriter, request, err)
 		return
 	}
-	httpx.RespondWithJSON(responseWriter, http.StatusOK, map[string]any{"orders": orders})
+	responses := make([]orderResponse, 0, len(orders))
+	for _, order := range orders {
+		responses = append(responses, orderResponse{
+			ID:         order.ID,
+			Status:     order.Status,
+			TotalCents: order.TotalCents,
+			CreatedAt:  order.CreatedAt,
+		})
+	}
+	httpx.RespondWithJSON(responseWriter, http.StatusOK, map[string]any{"orders": responses})
 }
 
 func (handler *Handler) Order(responseWriter http.ResponseWriter, request *http.Request) {
@@ -83,7 +107,13 @@ func (handler *Handler) Order(responseWriter http.ResponseWriter, request *http.
 	for _, item := range items {
 		itemResponses = append(itemResponses, orderItemResponse{ProductID: item.ProductID, ProductName: item.ProductName, Quantity: item.Quantity, PriceCents: item.PriceCents})
 	}
-	httpx.RespondWithJSON(responseWriter, http.StatusOK, map[string]any{"order": order, "items": itemResponses})
+	orderResp := orderResponse{
+		ID:         order.ID,
+		Status:     order.Status,
+		TotalCents: order.TotalCents,
+		CreatedAt:  order.CreatedAt,
+	}
+	httpx.RespondWithJSON(responseWriter, http.StatusOK, map[string]any{"order": orderResp, "items": itemResponses})
 }
 
 func (handler *Handler) Products(responseWriter http.ResponseWriter, request *http.Request) {
@@ -92,12 +122,22 @@ func (handler *Handler) Products(responseWriter http.ResponseWriter, request *ht
 		handler.ProductsOptions(responseWriter, request)
 		return
 	}
-	products, err := handler.productStore.ListAllProducts(request.Context())
+	products, err := handler.productStore.ListProducts(request.Context(), handler.maxProductResults)
 	if err != nil {
 		handler.internalError(responseWriter, request, err)
 		return
 	}
-	httpx.RespondWithJSON(responseWriter, http.StatusOK, map[string]any{"products": products})
+	responses := make([]productResponse, 0, len(products))
+	for _, product := range products {
+		responses = append(responses, productResponse{
+			ID:          product.ID,
+			Name:        product.Name,
+			Description: product.Description,
+			ImagePath:   product.ImagePath,
+			PriceCents:  product.PriceCents,
+		})
+	}
+	httpx.RespondWithJSON(responseWriter, http.StatusOK, map[string]any{"products": responses})
 }
 
 func (handler *Handler) ProductsOptions(responseWriter http.ResponseWriter, request *http.Request) {
