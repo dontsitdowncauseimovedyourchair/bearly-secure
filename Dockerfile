@@ -17,7 +17,7 @@ WORKDIR /app
 COPY --from=build /out/bearly-secure /out/bearly-attacker-lab ./
 COPY attacker-lab ./attacker-lab
 COPY web ./web
-COPY --chown=bearly:bearly data/uploads/mystery-shack-tax-exemption.pdf ./data/uploads/mystery-shack-tax-exemption.pdf
+COPY --chown=bearly:bearly data/fixtures ./data/fixtures
 
 RUN mkdir -p ./data && chown bearly:bearly ./data
 

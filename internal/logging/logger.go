@@ -13,12 +13,19 @@ import (
 const redactedValue = "[REDACTED]"
 
 var sensitiveKeys = map[string]bool{
-	"sessionId":   true,
-	"resetToken":  true,
-	"resetLink":   true,
-	"secret":      true,
-	"adminNotes":  true,
-	"storagePath": true,
+	"sessionId":          true,
+	"resetToken":         true,
+	"resetLink":          true,
+	"secret":             true,
+	"adminNotes":         true,
+	"storagePath":        true,
+	"email":              true,
+	"shippingName":       true,
+	"shippingAddress":    true,
+	"shippingCity":       true,
+	"shippingRegion":     true,
+	"shippingPostalCode": true,
+	"originalName":       true,
 }
 
 type Logger struct {
