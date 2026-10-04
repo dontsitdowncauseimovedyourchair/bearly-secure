@@ -229,9 +229,16 @@ func (handler *Handler) readArchive(responseWriter http.ResponseWriter, request 
 		}
 		return nil, fmt.Errorf("parse archive upload: %w", err)
 	}
-	files := request.MultipartForm.File["archive"]
-	if len(files) == 0 {
+	totalFiles := 0
+	for _, fileList := range request.MultipartForm.File {
+		totalFiles += len(fileList)
+	}
+	if totalFiles != 1 || len(request.MultipartForm.File["archive"]) != 1 {
 		return nil, errors.New("missing archive upload")
+	}
+	files := request.MultipartForm.File["archive"]
+	if files[0].Size > handler.maxUploadBytes {
+		return nil, errArchiveTooLarge
 	}
 	file, err := files[0].Open()
 	if err != nil {

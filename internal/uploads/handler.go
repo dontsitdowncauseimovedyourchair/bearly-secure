@@ -165,9 +165,16 @@ func (handler *Handler) readUpload(responseWriter http.ResponseWriter, request *
 		}
 		return nil, "", err
 	}
-	files := request.MultipartForm.File["document"]
-	if len(files) == 0 {
+	totalFiles := 0
+	for _, fileList := range request.MultipartForm.File {
+		totalFiles += len(fileList)
+	}
+	if totalFiles != 1 || len(request.MultipartForm.File["document"]) != 1 {
 		return nil, "", errors.New("missing document upload")
+	}
+	files := request.MultipartForm.File["document"]
+	if files[0].Size > handler.maxUploadBytes {
+		return nil, "", errUploadTooLarge
 	}
 	file, err := files[0].Open()
 	if err != nil {
